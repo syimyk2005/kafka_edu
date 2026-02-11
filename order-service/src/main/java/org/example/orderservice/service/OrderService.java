@@ -23,7 +23,7 @@ public class OrderService {
             orderRequest.quantity()
         );
 
-        kafkaTemplate.send("order-placed", orderPlacedEvent);
+        kafkaTemplate.send("order-placed", orderPlacedEvent.orderId(), orderPlacedEvent);
 
         return orderId;
     }
