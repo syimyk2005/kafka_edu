@@ -90,3 +90,21 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-0:9091,kafka-1:9091,kafka-2:9091
       # Настройка для динамической конфигурации брокеров через UI
       DYNAMIC_CONFIG_ENABLED: true
+
+  postgres-inventory:
+    # Будем использовать PostgreSQL
+    image: postgres:14
+    # Имя контейнера
+    container_name: postgres-inventory
+    # hostname контейнера
+    hostname: postgres-inventory
+    # Пробрасываем порты
+    ports:
+      - "5432:5432"
+    environment:
+      # Юзер
+      POSTGRES_USER: postgres
+      # Пароль
+      POSTGRES_PASSWORD: postgres
+      # Стартовая база данных
+      POSTGRES_DB: inventory_db

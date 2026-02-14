@@ -1,6 +1,6 @@
 package org.example.orderservice.service;
 
-import org.example.orderservice.dto.OrderRequest;
+import org.example.orderservice.model.dto.OrderRequest;
 import org.example.orderservice.event.OrderPlacedEvent;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
