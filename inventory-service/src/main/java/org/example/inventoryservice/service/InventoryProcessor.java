@@ -1,5 +1,7 @@
 package org.example.inventoryservice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.transaction.Transactional;
 import org.example.inventoryservice.event.InventoryRejectedEvent;
 import org.example.inventoryservice.event.InventoryReservedEvent;
 import org.example.inventoryservice.event.OrderPlacedEvent;
@@ -11,45 +13,31 @@ import org.example.inventoryservice.repository.ProcessedOrderIdRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.databind.ObjectMapper;
 
 @Service
-public class InventoryService {
-    private static final Logger logger = LoggerFactory.getLogger(InventoryService.class);
+public class InventoryProcessor {
+    private final static Logger logger = LoggerFactory.getLogger(InventoryProcessor.class);
     private final InventoryRepository inventoryRepository;
     private final ProcessedOrderIdRepository processedOrderIdRepository;
     private final OutboxEventRepository outboxEventRepository;
-    private final TransactionTemplate transactionTemplate;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public InventoryService(
-            InventoryRepository inventoryRepository,
-            ProcessedOrderIdRepository processedOrderIdRepository,
-            OutboxEventRepository outboxEventRepository,
-            TransactionTemplate transactionTemplate,
-            ObjectMapper objectMapper
+    public InventoryProcessor(
+        InventoryRepository inventoryRepository,
+        ProcessedOrderIdRepository processedOrderIdRepository,
+        OutboxEventRepository outboxEventRepository
     ) {
         this.inventoryRepository = inventoryRepository;
         this.processedOrderIdRepository = processedOrderIdRepository;
         this.outboxEventRepository = outboxEventRepository;
-        this.transactionTemplate = transactionTemplate;
-        this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(topics = "order-placed")
-    public void reserveInventory(OrderPlacedEvent orderPlacedEvent) {
-        transactionTemplate.executeWithoutResult(status -> {
-            processOrderInTransaction(orderPlacedEvent);
-        }); // Чётко контролируем то, что транзакция бд будет совершена до выхода из метода
-    }
-
-    private void processOrderInTransaction(OrderPlacedEvent orderPlacedEvent) {
+    @Transactional
+    public void processOrder(OrderPlacedEvent orderPlacedEvent) {
         try {
             processedOrderIdRepository.save(new ProcessedOrderId(
-                    orderPlacedEvent.orderId()
+                orderPlacedEvent.orderId()
             ));
         } catch (DataIntegrityViolationException e) {
             logger.info("Order {} already processed", orderPlacedEvent.orderId());
@@ -59,8 +47,8 @@ public class InventoryService {
         int count = inventoryRepository.deductStock(orderPlacedEvent.productName(), orderPlacedEvent.quantity());
         String topic = (count > 0) ? "inventory-reserved" : "inventory-rejected";
         Object event = (count > 0)
-                ? new InventoryReservedEvent(orderPlacedEvent.orderId(), orderPlacedEvent.email())
-                : new InventoryRejectedEvent(orderPlacedEvent.orderId(), orderPlacedEvent.email());
+            ? new InventoryReservedEvent(orderPlacedEvent.orderId(), orderPlacedEvent.email())
+            : new InventoryRejectedEvent(orderPlacedEvent.orderId(), orderPlacedEvent.email());
         String json;
 
         try {
@@ -70,9 +58,9 @@ public class InventoryService {
         }
 
         OutboxEvent outboxEvent = new OutboxEvent(
-                orderPlacedEvent.orderId(),
-                topic,
-                json
+            orderPlacedEvent.orderId(),
+            topic,
+            json
         );
 
         outboxEventRepository.save(outboxEvent);
